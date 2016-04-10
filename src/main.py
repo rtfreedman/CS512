@@ -3,6 +3,7 @@ import os
 import sys
 import pip
 import string
+import itertools
 from collections import defaultdict
 from collections import Counter
 from utils import *
@@ -79,33 +80,71 @@ def word_emoji_hashtag(tokenized_tweets):
         data = defaultdict(list)
         data['emojis'] = [t for t in tweet if is_emoji(t)]
         data['hashtags'] = [t for t in tweet if is_hashtag(t)]
-        data['words'] = [t for t in tweet if not is_emoji(t) and not is_hashtag(t)]
+        data['words'] = [t.lower() for t in tweet if not is_emoji(t) and not is_hashtag(t)]
         yield data
+
+# return lines of header tagged data for a filename
+def tagged_data(fpath):
+    items=load(fpath)  # generate data
+    lines = strip_line(items)  # generate stripped lines
+    tokens = tokenize_line(lines)  # generate tokens of lines
+    yield from extract_data(tokens)  # cast tokens to dicts
+
+# return word, hashtag, emoji bins from each line of file data
+def binned_data(tagged_data):
+    tokenized_tweets = tokenize_message(data)  # tokenize the messages
+    non_user_tokens = remove_users(tokenized_tweets)  # remove user tokens
+    non_punc_tokens = remove_punctuation(non_user_tokens)  # remove punctuation only tokens
+    non_url_tokens = remove_http(non_punc_tokens)  # remove url tokens
+    yield from word_emoji_hashtag(non_url_tokens)  # returns a dict of 'emojis','hashtags','words' for each tweet
+
+# build a co-occurrence matrixes of tokenized data by a window of lines
+def generate_matrix(kind, binned_data, window_size=1000):
+    assert kind in ('emojis','words','hashtags'), "Unknown Data Kind!"
+
+    # truncate binned data to make it a multiple of window_size
+    if len(binned_data) < window_size:
+        print("window size is to large")
+        return
+    elif len(binned_data) % window_size != 0:
+        binned_data = binned_data[:-(len(binned_data)%window_size)]
+
+    for index in range(0, len(binned_data), window_size):
+        # get window of data
+        win_data = binned_data[index:index+window_size]
+        # make unique kind pair for each value of kind in each tweet
+        window_comat = Counter()
+        for tweet in win_data:
+            tweet_comat = Counter()
+            kdata = tweet[kind]
+            for p in itertools.combinations(kdata,2):
+                pair = list(p)
+                pair.sort()
+                tweet_comat.update({tuple(pair): 1})
+            window_comat = window_comat + tweet_comat
+        yield window_comat
+
+
+
+
+
+
 
 if __name__ == "__main__":
     PATH = "../data/test10000.txt"
 
     # build up the chain of generators
-    items=load(PATH)  # generate data
-    lines = strip_line(items)  # generate stripped lines
-    tokens = tokenize_line(lines)  # generate tokens of lines
-    data = extract_data(tokens)  # cast tokens to dicts
-    tokenized_tweets = tokenize_message(data)  # tokenize the messages
-    non_user_tokens = remove_users(tokenized_tweets)  # remove user tokens
-    non_punc_tokens = remove_punctuation(non_user_tokens)  # remove punctuation only tokens
-    non_url_tokens = remove_http(non_punc_tokens)  # remove url tokens
-    separated_kinds = word_emoji_hashtag(non_url_tokens)  # returns a dict of 'emojis','hashtags','words' for each tweet
+    data = tagged_data(PATH)
+    separated_kinds = list(binned_data(data))
+    emats = generate_matrix('emojis',separated_kinds,window_size=1000)
+    hmats = generate_matrix('hashtags',separated_kinds,window_size=1000)
+    wmats = generate_matrix('words',separated_kinds,window_size=1000)
 
-    # none of the chain of generators execute until this for loop happens.
-    # for now generate a binning of the emojis
-    binning = Counter()
-    for s in separated_kinds:
-        [binning.update({e:1}) for e in s['emojis']]
-
-    i = 0
-    for e in binning.most_common():
-        i += 1
-        print(e)
-        if i > 10: break
-
+    # print out matrix for first window
+    e = next(iter(emats))
+    h = next(iter(hmats))
+    w = next(iter(wmats))
+    print(e)
+    print(h)
+#    print(w)
 
