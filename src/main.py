@@ -16,6 +16,12 @@ except ImportError:
     import emoji
 
 try:
+    import scipy
+except ImportError:
+    install('scipy')
+    import scipy
+
+try:
     import nltk
 except ImportError:
     install('nltk')
@@ -23,107 +29,143 @@ except ImportError:
 
 # import the tweet tokenizer
 from nltk.tokenize import TweetTokenizer
+from scipy import sparse
 
-## funtions
+# the headers of the files we are using. Declared as a global
+HEADERS = ['userid','lat','lon','unixtimex1000','tweet','polygonid','landusecode','landusecategory']
+TOKENIZER = TweetTokenizer()
+EMOJI = list(emoji.UNICODE_EMOJI.keys())
+
+#### funtions####
 # uses generator functions to keep memory use low
 
+### file parseing ###
 # load all files in a directory and treat it as data
+# lines are generated from the file 1 by 1
 def load(fpath):
     with open(fpath, 'r') as fin:
         yield from fin
 
 # strips any whitespace or newlines from the ends of the line
-def strip_line(loaded_path):
-    yield from (l.strip() for l in loaded_path)
+def stripln(iterable): # a batch of lines is passed as an interable
+    yield from (l.strip() for l in iterable)
 
 # splits the tab delimited lines of the file
-def tokenize_line(lines):
-    yield from (l.split('\t') for l in lines)
+def tokenize(iterable):  # iterable of a batch of lines
+    yield from (l.split('\t') for l in iterable)
 
-# assigns headers to the tokens of the lines. Returns the lines as dictionaries
-def extract_data(line_tokens):
-    headers = ['userid','lat','lon','unixtimex1000','tweet','polygonid','landusecode','landusecategory']
-    yield from ({k: v for k,v in zip(headers, tokens)} for tokens in line_tokens)
+# assigns headers to the tokens of the lines. Returns the lines as dictionaries with headers as the key
+def extract_data(iterable):  # iterable is a batch of lines
+    yield from ({header: tvalue for header,tvalue in zip(HEADERS, tokens)} for tokens in iterable)
 
-# operates on the message to tokenize it as a tweet
-def tokenize_message(messages):
-    tknzr = TweetTokenizer()
-    yield from (tknzr.tokenize(m['tweet']) for m in messages)
+# parse the file and return an iterable (generator) of
+# each line/tweet in the form of a dictionary
+# based on the column header in the file
+def parser(fpath):  # filepath to load
+    yield from extract_data(tokenize(stripln(load(fpath))))
 
-# remove any users from the tokenized tweets
-def remove_users(tokenized_tweets):  # @user
-    yield from ([t for t in token if not t.startswith('@')] for token in tokenized_tweets)
+####  the next set of functions operate on the tweet message itself ###
 
-# remove random punctuation from the tokenized tweets. Don't worry, emoji is unicode so this won't kill it.
-def remove_punctuation(tokenized_tweets):  # emojis are unicode
-    def _filter_(strng):
-        if len([i for i in strng if not i in string.punctuation]) == 0:
-            return False
-        else:
-            return True
+# a utility function returns True if the string input is punctuation
+def is_punc(string_token):
+    return all(map(lambda char: char in string.punctuation, string_token))
 
-    yield from ([t for t in token if _filter_(t)] for token in tokenized_tweets)
+# is the string an emoji character?
+def is_emoji(string_token):
+    return string_token in EMOJI
 
-# remove all urls tokens that begin with http
-def remove_http(tokenized_tweets):
-    yield from ([t for t in token if not t.startswith('http:')] for token in tokenized_tweets)
+# is this string a hashtag?
+def is_hashtag(string_token):
+    return string_token.startswith('#')
+
+
+# tokenize the tweet message and ruturn just the message.
+# accepts a parsed line of data
+def npl_message(iterable):
+    yield from (TOKENIZER.tokenize(data['tweet']) for data in iterable)
+
+# scrub the tweet by removing references to users (@user), 
+# spurious punctuation (emoji is unicode), 
+# and http urls from the tweet messages.
+# input is an iterable of tokenized tweets
+def scrub(iterable):
+    drop_users = ([t for t in tweet if not t.startswith('@')] for tweet in iterable)  # drop users
+    drop_urls  = ([t for t in tweet if not t.startswith('http:')] for tweet in drop_users)  # drop urls
+    drop_punc  = ([t for t in tweet if not is_punc(t)] for tweet in drop_urls)  # drop puncuation
+    yield from (tweet for tweet in drop_punc if len(tweet)!=0)  # don't return totally scrubbed away tweets
 
 # separate the tokens of the tweet into words, hashtags, or emojis
-def word_emoji_hashtag(tokenized_tweets):
-    def is_emoji(token):
-        return token in emoji.EMOJI_UNICODE.values()
-
-    def is_hashtag(token):
-        return token.startswith('#')
-
-    for tweet in tokenized_tweets:
-        data = defaultdict(list)
-        data['emojis'] = [t for t in tweet if is_emoji(t)]
-        data['hashtags'] = [t for t in tweet if is_hashtag(t)]
-        data['words'] = [t.lower() for t in tweet if not is_emoji(t) and not is_hashtag(t)]
+def word_emoji_hashtag(iterable):  # iterable is a set of scrubbed tweets
+    for tweet in iterable:
+        data = {}
+        data['emojis'] = []
+        data['hashtags'] = []
+        data['words'] = []
+        for t in tweet:
+            if is_emoji(t):
+                data['emojis'].append(t)
+            elif is_hashtag(t):
+                data['hashtags'].append(t)
+            else:
+                data['words'].append(t.lower())
         yield data
 
-# return lines of header tagged data for a filename
-def tagged_data(fpath):
-    items=load(fpath)  # generate data
-    lines = strip_line(items)  # generate stripped lines
-    tokens = tokenize_line(lines)  # generate tokens of lines
-    yield from extract_data(tokens)  # cast tokens to dicts
-
 # return word, hashtag, emoji bins from each line of file data
-def binned_data(tagged_data):
-    tokenized_tweets = tokenize_message(data)  # tokenize the messages
-    non_user_tokens = remove_users(tokenized_tweets)  # remove user tokens
-    non_punc_tokens = remove_punctuation(non_user_tokens)  # remove punctuation only tokens
-    non_url_tokens = remove_http(non_punc_tokens)  # remove url tokens
-    yield from word_emoji_hashtag(non_url_tokens)  # returns a dict of 'emojis','hashtags','words' for each tweet
+def binned_data(iterable):  # iterable are the dictionary representations of each line of the file
+    nlp_tweets = npl_message(iterable)
+    scrubbed_tweets = scrub(nlp_tweets)
+    yield from word_emoji_hashtag(scrubbed_tweets)  # returns a dict of 'emojis','hashtags','words' for each tweet
+
 
 # build a co-occurrence matrixes of tokenized data by a window of lines
-def generate_matrix(kind, binned_data, window_size=1000):
-    assert kind in ('emojis','words','hashtags'), "Unknown Data Kind!"
+def generate_matrix(data, kind=[]):  # data should be passed in chunks of window_size
+    # type checks
+    for k in kind:
+        assert k in ('emojis','words','hashtags'), "Unknown Data Kind!"
 
-    # truncate binned data to make it a multiple of window_size
-    if len(binned_data) < window_size:
-        print("window size is to large")
-        return
-    elif len(binned_data) % window_size != 0:
-        binned_data = binned_data[:-(len(binned_data)%window_size)]
+    # generate an index of unique tokens based on data
+    index = set()
+    for d in data:
+        for k in kind:
+            for token in d[k]:
+                index.add(token)
+    index = list(index)
 
-    for index in range(0, len(binned_data), window_size):
-        # get window of data
-        win_data = binned_data[index:index+window_size]
-        # make unique kind pair for each value of kind in each tweet
-        window_comat = Counter()
-        for tweet in win_data:
-            tweet_comat = Counter()
-            kdata = tweet[kind]
-            for p in itertools.combinations(kdata,2):
-                pair = list(p)
-                pair.sort()
-                tweet_comat.update({tuple(pair): 1})
-            window_comat = window_comat + tweet_comat
-        yield window_comat
+    # make an output sparse matrix
+    matrix = sparse.lil_matrix((len(index), len(index)))
 
+    # if index of row co-occures with index of col then matrix[row,col] += 1
+    for d in data:
+
+        # get all the tokens within a tweet from all the kinds
+        tokens = []
+        for k in kind:
+            for token in d[k]:
+                tokens.append(token)
+
+        # generate co-occurence for the tokens
+        for p in itertools.combinations(tokens, 2):
+            idxr = index.index(p[0])
+            idxc = index.index(p[1])
+
+            # increment the spare matrix
+            matrix[idxr, idxc] += 1
+
+    return index, matrix
+
+# resolve the values of the matrix based on the index from greatest frequency to least
+def resolve(index, matrix):
+    print(len(index), matrix.shape)
+    output = {}
+    # collect all the values
+    for i in range(matrix.shape[0]):
+        for j in range(i, matrix.shape[1]):
+            val = matrix[i,j]
+            if val>1:  # skip all 1 values
+                idxpair = [index[i],index[j]]
+                idxpair.sort()
+                output[tuple(idxpair)] = val
+    return output
 
 
 
@@ -134,17 +176,21 @@ if __name__ == "__main__":
     PATH = "../data/test10000.txt"
 
     # build up the chain of generators
-    data = tagged_data(PATH)
-    separated_kinds = list(binned_data(data))
-    emats = generate_matrix('emojis',separated_kinds,window_size=1000)
-    hmats = generate_matrix('hashtags',separated_kinds,window_size=1000)
-    wmats = generate_matrix('words',separated_kinds,window_size=1000)
+    print("LOAD DATA")
+    data = parser(PATH)
 
-    # print out matrix for first window
-    e = next(iter(emats))
-    h = next(iter(hmats))
-    w = next(iter(wmats))
-    print(e)
-    print(h)
-#    print(w)
+    # we can filter data by other attriutes in the file
+    # here if we want to. This will happen before it is
+    # passed to binned_data
 
+    separated_kinds = list(binned_data(data))[:1000] # 1000 sized window
+
+
+    idx,emats = generate_matrix(separated_kinds, ['emojis'])
+    print(resolve(idx,emats))
+
+    idx,hmats = generate_matrix(separated_kinds, ['hashtags', 'emojis'])
+    print(resolve(idx,hmats))
+
+    idx,wmats = generate_matrix(separated_kinds, ['words'])
+    print(resolve(idx,wmats))
