@@ -110,6 +110,7 @@ def word_emoji_hashtag(iterable):  # iterable is a set of scrubbed tweets
                 data['words'].append(t.lower())
         yield data
 
+<<<<<<< Updated upstream
 # return word, hashtag, emoji bins from each line of file data
 def binned_data(iterable):  # iterable are the dictionary representations of each line of the file
     nlp_tweets = npl_message(iterable)
@@ -171,6 +172,25 @@ def resolve(index, matrix):
 
 
 
+=======
+def load_lexicon():
+    f=open('../data/positive-words.txt','r')
+    positive=f.readlines()
+    f.close()
+    f=open('../data/negative-words.txt','r')
+    negative=f.readlines()
+    f.close()
+    for term in positive:
+        term = term.replace("\n","")
+    for term in negative:
+        term = term.replace("\n","")
+    lexicon = dict()
+    for term in positive:
+        lexicon[term] = 1
+    for term in negative:
+        lexicon[term] = -1
+    return lexicon
+>>>>>>> Stashed changes
 
 if __name__ == "__main__":
     PATH = "../data/test10000.txt"
