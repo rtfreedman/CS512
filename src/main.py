@@ -207,7 +207,7 @@ if __name__ == "__main__":
     PATH = "../data/test10000.txt"
     TERMS = ['emojis']  # what terms to co-occur
 
-    print("time,window,count,score")
+    print("time,window,count,score,edu")
 
     # load the lexicon
     lexicon = load_lexicon()
@@ -230,10 +230,16 @@ if __name__ == "__main__":
 
         # apply time filter
         window = list(filter(lambda t: win_start <= dt.datetime.fromtimestamp(float(t['unixtimex1000'])/1000.) < win_end, data))
+        edu_window = list(filter(lambda t: t['landusecode'] in ('1322','1321') ,window))
+        non_edu_window = list(filter(lambda t: t['landusecode'] not in ('1322','1321') ,window))
 
-        # process the tweets into a co-occurrance matrix
-        score = apply_lexicon(lexicon, resolve(*generate_matrix(list(binned_data(window)), TERMS)))
 
-        print("{3},{0},{1},{2}".format(hour, len(window), score, win_start))
+        # education and non-education (1321,1322)
+        education_score = apply_lexicon(lexicon, resolve(*generate_matrix(list(binned_data(edu_window)), TERMS)))
+        non_education_score = apply_lexicon(lexicon, resolve(*generate_matrix(list(binned_data(non_edu_window)), TERMS)))
+
+        # print scores
+        print("{3},{0},{1},{2},yes".format(hour, len(window), education_score, win_start))
+        print("{3},{0},{1},{2},no".format(hour, len(window), non_education_score, win_start))
 
         win_start = win_end  # reset window start for the next window
