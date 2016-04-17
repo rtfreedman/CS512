@@ -90,7 +90,7 @@ def npl_message(iterable):
 # input is an iterable of tokenized tweets
 def scrub(iterable):
     drop_users = ([t for t in tweet if not t.startswith('@')] for tweet in iterable)  # drop users
-    drop_urls  = ([t for t in tweet if not t.startswith('http:')] for tweet in drop_users)  # drop urls
+    drop_urls  = ([t for t in tweet if not t.startswith('http:') and not t.startswith('https:') and not t.startswith('ftp:')] for tweet in drop_users)  # drop urls
     drop_punc  = ([t for t in tweet if not is_punc(t)] for tweet in drop_urls)  # drop puncuation
     yield from (tweet for tweet in drop_punc if len(tweet)!=0)  # don't return totally scrubbed away tweets
 
@@ -110,13 +110,11 @@ def word_emoji_hashtag(iterable):  # iterable is a set of scrubbed tweets
                 data['words'].append(t.lower())
         yield data
 
-<<<<<<< Updated upstream
 # return word, hashtag, emoji bins from each line of file data
 def binned_data(iterable):  # iterable are the dictionary representations of each line of the file
     nlp_tweets = npl_message(iterable)
     scrubbed_tweets = scrub(nlp_tweets)
     yield from word_emoji_hashtag(scrubbed_tweets)  # returns a dict of 'emojis','hashtags','words' for each tweet
-
 
 # build a co-occurrence matrixes of tokenized data by a window of lines
 def generate_matrix(data, kind=[]):  # data should be passed in chunks of window_size
@@ -168,29 +166,40 @@ def resolve(index, matrix):
                 output[tuple(idxpair)] = val
     return output
 
-
-
-
-
-=======
 def load_lexicon():
-    f=open('../data/positive-words.txt','r')
-    positive=f.readlines()
-    f.close()
-    f=open('../data/negative-words.txt','r')
-    negative=f.readlines()
-    f.close()
-    for term in positive:
-        term = term.replace("\n","")
-    for term in negative:
-        term = term.replace("\n","")
     lexicon = dict()
-    for term in positive:
-        lexicon[term] = 1
-    for term in negative:
-        lexicon[term] = -1
+    with open('../data/positive-words.txt','r') as positive:
+        words = [term.replace('\n','') for term in positive]
+        [lexicon.update({w: 1}) for w in words]
+
+    with open('../data/negative-words.txt','r',encoding='latin1') as negative:
+        words = [term.replace('\n','') for term in negative]
+        [lexicon.update({w: -1}) for w in words]
+
+    with open('../data/lexicon-emoji.txt','r') as smileys:
+        for term in smileys:
+            e, v = term.strip().split(' ')
+            lexicon[e] = float(v)
+
     return lexicon
->>>>>>> Stashed changes
+
+def apply_lexicon(lexicon, resolved_dict):
+
+    def lookup(k):
+        if k in lexicon:
+            return lexicon[k]
+        else:
+            return 0
+
+    # sum the tuple pair values
+    pair_sums = list(map(lambda k: lookup(k[0]) + lookup(k[1]), resolved_dict.keys()))
+
+    if len(pair_sums) == 0: return "No Pair Sums"
+
+    # average all the pair_sums
+    return sum(pair_sums) / len(pair_sums)
+
+
 
 if __name__ == "__main__":
     PATH = "../data/test10000.txt"
@@ -203,14 +212,22 @@ if __name__ == "__main__":
     # here if we want to. This will happen before it is
     # passed to binned_data
 
-    separated_kinds = list(binned_data(data))[:1000] # 1000 sized window
+    # load the lexicon
+    lexicon = load_lexicon()
 
+    separated_kinds = list(binned_data(data))
 
-    idx,emats = generate_matrix(separated_kinds, ['emojis'])
-    print(resolve(idx,emats))
+    for i in range(0, len(separated_kinds), 1000):  # step in window size of 1000
+        window = separated_kinds[i: i+1000]
 
-    idx,hmats = generate_matrix(separated_kinds, ['hashtags', 'emojis'])
-    print(resolve(idx,hmats))
+        print("WINDOW ", i, " ", len(window))
 
-    idx,wmats = generate_matrix(separated_kinds, ['words'])
-    print(resolve(idx,wmats))
+        idx,emats = generate_matrix(window, ['emojis'])
+        print(apply_lexicon(lexicon,resolve(idx,emats)))
+
+        idx,hmats = generate_matrix(window, ['hashtags', 'emojis'])
+        print(apply_lexicon(lexicon,resolve(idx,hmats)))
+
+        # commented out for testing because it is slow
+        #idx,wmats = generate_matrix(window, ['words'])
+        #print(apply_lexicon(lexicon,resolve(idx,wmats)))
