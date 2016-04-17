@@ -230,5 +230,5 @@ if __name__ == "__main__":
         print(apply_lexicon(lexicon,resolve(idx,hmats)))
 
         # commented out for testing because it is slow
-        #idx,wmats = generate_matrix(window, ['words'])
-        #print(apply_lexicon(lexicon,resolve(idx,wmats)))
+        idx,wmats = generate_matrix(window, ['words'])
+        print(apply_lexicon(lexicon,resolve(idx,wmats)))
