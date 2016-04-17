@@ -3,6 +3,9 @@ import os
 import sys
 import pip
 import string
+import time
+import math
+import datetime as dt
 import itertools
 from collections import defaultdict
 from collections import Counter
@@ -160,7 +163,7 @@ def resolve(index, matrix):
     for i in range(matrix.shape[0]):
         for j in range(i, matrix.shape[1]):
             val = matrix[i,j]
-            if val!=0:  
+            if val!=0:
                 idxpair = [index[i],index[j]]
                 idxpair.sort()
                 output[tuple(idxpair)] = val
@@ -195,40 +198,42 @@ def apply_lexicon(lexicon, resolved_dict):
     base = sum(resolved_dict.values())
     pair_sums = list(map(lambda k: lookup(k[0][0]) + lookup(k[0][1]) * float(k[1])/ base, resolved_dict.items()))
 
-    if len(pair_sums) == 0: return "No Pair Sums"
+    if len(pair_sums) == 0: return 0  # no pairs to use 
 
     # average all the pair_sums
     return sum(pair_sums) / len(pair_sums)
 
-
-
 if __name__ == "__main__":
     PATH = "../data/test10000.txt"
+    TERMS = ['emojis']  # what terms to co-occur
 
-    # build up the chain of generators
-    print("LOAD DATA")
-    data = parser(PATH)
-
-    # we can filter data by other attriutes in the file
-    # here if we want to. This will happen before it is
-    # passed to binned_data
+    print("time,window,count,score")
 
     # load the lexicon
     lexicon = load_lexicon()
 
-    separated_kinds = list(binned_data(data))
+    # build up the chain of generators
+    data = list(parser(PATH))
 
-    for i in range(0, len(separated_kinds), 1000):  # step in window size of 1000
-        window = separated_kinds[i: i+1000]
+    # get the beginning and ending times within the file
+    t = time.gmtime(float(data[0]['unixtimex1000'])/1000.)
+    t2 = time.gmtime(float(data[-1]['unixtimex1000'])/1000.)
+    start = dt.datetime(year=t.tm_year, month=t.tm_mon, day=1)
+    end = dt.datetime(year=t2.tm_year, month=t2.tm_mon + 1, day=1)
+    total = math.ceil((end - start).total_seconds() / 3600.) # convert to hours
 
-        print("WINDOW ", i, " ", len(window))
+    # iterate over times hour by hour
+    for hour in range(0, total):
+        if hour == 0:
+            win_start = start
+        win_end = start + dt.timedelta(0, hour*3600)
 
-        idx,emats = generate_matrix(window, ['emojis'])
-        print(apply_lexicon(lexicon,resolve(idx,emats)))
+        # apply time filter
+        window = list(filter(lambda t: win_start <= dt.datetime.fromtimestamp(float(t['unixtimex1000'])/1000.) < win_end, data))
 
-        idx,hmats = generate_matrix(window, ['hashtags', 'emojis'])
-        print(apply_lexicon(lexicon,resolve(idx,hmats)))
+        # process the tweets into a co-occurrance matrix
+        score = apply_lexicon(lexicon, resolve(*generate_matrix(list(binned_data(window)), TERMS)))
 
-        # commented out for testing because it is slow
-        idx,wmats = generate_matrix(window, ['words'])
-        print(apply_lexicon(lexicon,resolve(idx,wmats)))
+        print("{3},{0},{1},{2}".format(hour, len(window), score, win_start))
+
+        win_start = win_end  # reset window start for the next window
