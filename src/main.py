@@ -154,13 +154,13 @@ def generate_matrix(data, kind=[]):  # data should be passed in chunks of window
 
 # resolve the values of the matrix based on the index from greatest frequency to least
 def resolve(index, matrix):
-    print(len(index), matrix.shape)
+    #print(len(index), matrix.shape)
     output = {}
     # collect all the values
     for i in range(matrix.shape[0]):
         for j in range(i, matrix.shape[1]):
             val = matrix[i,j]
-            if val>1:  # skip all 1 values
+            if val!=0:  
                 idxpair = [index[i],index[j]]
                 idxpair.sort()
                 output[tuple(idxpair)] = val
@@ -192,7 +192,8 @@ def apply_lexicon(lexicon, resolved_dict):
             return 0
 
     # sum the tuple pair values
-    pair_sums = list(map(lambda k: lookup(k[0]) + lookup(k[1]), resolved_dict.keys()))
+    base = sum(resolved_dict.values())
+    pair_sums = list(map(lambda k: lookup(k[0][0]) + lookup(k[0][1]) * float(k[1])/ base, resolved_dict.items()))
 
     if len(pair_sums) == 0: return "No Pair Sums"
 
