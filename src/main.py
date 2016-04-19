@@ -173,11 +173,10 @@ def load_lexicon():
     lex = dict()
 
     with open('../data/sentiment.txt','r') as sentiment:
-    	for item in sentiment:
-    		line = item.split(',')
-    		v = float(line[0]) - float(line[1])
-    		for x in xrange(2,len(line)):
-    			lex[line[x]] = v
+        for item in sentiment:
+            line = item.split(',')
+            v = float(line[0]) - float(line[1])
+            [lex.update({word: v}) for word in line[2:]]
 
     with open('../data/lexicon-emoji.txt','r') as smileys:
         for term in smileys:
@@ -205,7 +204,7 @@ def apply_lexicon(lexicon, resolved_dict):
 
 if __name__ == "__main__":
     PATH = "../data/test10000.txt"
-    TERMS = ['emojis']  # what terms to co-occur
+    TERMS = ['emojis', 'words']  # what terms to co-occur
 
     print("time,window,count,score,edu")
 
@@ -239,7 +238,7 @@ if __name__ == "__main__":
         non_education_score = apply_lexicon(lexicon, resolve(*generate_matrix(list(binned_data(non_edu_window)), TERMS)))
 
         # print scores
-        print("{3},{0},{1},{2},yes".format(hour, len(window), education_score, win_start))
-        print("{3},{0},{1},{2},no".format(hour, len(window), non_education_score, win_start))
+        print("{3},{0},{1},{2},1".format(hour, len(window), education_score, win_start))
+        print("{3},{0},{1},{2},0".format(hour, len(window), non_education_score, win_start))
 
         win_start = win_end  # reset window start for the next window
