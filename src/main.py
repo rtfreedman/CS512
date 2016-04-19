@@ -157,6 +157,7 @@ def generate_matrix(data, kind=[]):  # data should be passed in chunks of window
 
 # resolve the values of the matrix based on the index from greatest frequency to least
 def resolve(index, matrix):
+
     #print(len(index), matrix.shape)
     output = {}
     # collect all the values
@@ -203,42 +204,45 @@ def apply_lexicon(lexicon, resolved_dict):
     return sum(pair_sums) / len(pair_sums)
 
 if __name__ == "__main__":
-    PATH = "../data/test10000.txt"
-    TERMS = ['emojis', 'words']  # what terms to co-occur
+    PATH = sys.argv[1]
+    TERMS = ['emojis']  # what terms to co-occur
 
-    print("time,window,count,score,edu")
+    with open('output.txt','a') as fout:
 
-    # load the lexicon
-    lexicon = load_lexicon()
+        fout.write("time,window,count,score,edu\n")
 
-    # build up the chain of generators
-    data = list(parser(PATH))
+        # load the lexicon
+        lexicon = load_lexicon()
 
-    # get the beginning and ending times within the file
-    t = time.gmtime(float(data[0]['unixtimex1000'])/1000.)
-    t2 = time.gmtime(float(data[-1]['unixtimex1000'])/1000.)
-    start = dt.datetime(year=t.tm_year, month=t.tm_mon, day=1)
-    end = dt.datetime(year=t2.tm_year, month=t2.tm_mon + 1, day=1)
-    total = math.ceil((end - start).total_seconds() / 3600.) # convert to hours
+        # build up the chain of generators
+        data = list(parser(PATH))
 
-    # iterate over times hour by hour
-    for hour in range(0, total):
-        if hour == 0:
-            win_start = start
-        win_end = start + dt.timedelta(0, hour*3600)
+        # get the beginning and ending times within the file
+        t = time.gmtime(float(data[0]['unixtimex1000'])/1000.)
+        t2 = time.gmtime(float(data[-1]['unixtimex1000'])/1000.)
+        start = dt.datetime(year=t.tm_year, month=t.tm_mon, day=1)
+        end = dt.datetime(year=t2.tm_year, month=t2.tm_mon + 1, day=1)
+        total = math.ceil((end - start).total_seconds() / 3600.) # convert to hours
 
-        # apply time filter
-        window = list(filter(lambda t: win_start <= dt.datetime.fromtimestamp(float(t['unixtimex1000'])/1000.) < win_end, data))
-        edu_window = list(filter(lambda t: t['landusecode'] in ('1322','1321') ,window))
-        non_edu_window = list(filter(lambda t: t['landusecode'] not in ('1322','1321') ,window))
+        # iterate over times hour by hour
+        for hour in range(0, total):
+            if hour == 0:
+                win_start = start
+            win_end = start + dt.timedelta(0, hour*3600)
+
+            # apply time filter
+            window = list(filter(lambda t: win_start <= dt.datetime.fromtimestamp(float(t['unixtimex1000'])/1000.) < win_end, data))
+            edu_window = list(filter(lambda t: t['landusecode'] in ('1322','1321') ,window))
+            non_edu_window = list(filter(lambda t: t['landusecode'] not in ('1322','1321') ,window))
 
 
-        # education and non-education (1321,1322)
-        education_score = apply_lexicon(lexicon, resolve(*generate_matrix(list(binned_data(edu_window)), TERMS)))
-        non_education_score = apply_lexicon(lexicon, resolve(*generate_matrix(list(binned_data(non_edu_window)), TERMS)))
+            # education and non-education (1321,1322)
+            education_score = apply_lexicon(lexicon, resolve(*generate_matrix(list(binned_data(edu_window)), TERMS)))
+            non_education_score = apply_lexicon(lexicon, resolve(*generate_matrix(list(binned_data(non_edu_window)), TERMS)))
 
-        # print scores
-        print("{3},{0},{1},{2},1".format(hour, len(window), education_score, win_start))
-        print("{3},{0},{1},{2},0".format(hour, len(window), non_education_score, win_start))
+            # print scores
+            fout.write("{3},{0},{1},{2},1\n".format(hour, len(edu_window), education_score, win_start))
+            fout.write("{3},{0},{1},{2},0\n".format(hour, len(non_edu_window), non_education_score, win_start))
+            fout.flush()
 
-        win_start = win_end  # reset window start for the next window
+            win_start = win_end  # reset window start for the next window
