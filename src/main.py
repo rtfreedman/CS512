@@ -170,21 +170,21 @@ def resolve(index, matrix):
     return output
 
 def load_lexicon():
-    lexicon = dict()
-    with open('../data/positive-words.txt','r') as positive:
-        words = [term.replace('\n','') for term in positive]
-        [lexicon.update({w: 1}) for w in words]
+    lex = dict()
 
-    with open('../data/negative-words.txt','r',encoding='latin1') as negative:
-        words = [term.replace('\n','') for term in negative]
-        [lexicon.update({w: -1}) for w in words]
+    with open('../data/sentiment.txt','r') as sentiment:
+    	for item in sentiment:
+    		line = item.split(',')
+    		v = float(line[0]) - float(line[1])
+    		for x in xrange(2,len(line)):
+    			lex[line[x]] = v
 
     with open('../data/lexicon-emoji.txt','r') as smileys:
         for term in smileys:
             e, v = term.strip().split(' ')
-            lexicon[e] = float(v)
+            lex[e] = float(v)
 
-    return lexicon
+    return lex
 
 def apply_lexicon(lexicon, resolved_dict):
 
