@@ -10,13 +10,33 @@ non_edu <- subset(data, edu == 0);
 # segment by hour
 b <- c()
 colors <- c()
-for (hr in seq(0, 23)) {
+for (hr in seq(1,23)) {
   # subset data
   e <- subset(edu, hour = hr);
   n <- subset(non_edu, hour = hr);
   # append data
-  b<- append(b, mean(e$score * e$count/max(e$count)));
-  b<- append(b, mean(n$score * n$count/max(n$count)));
+  b<- append(b, sum(e$score)/sum(e$count));
+  b<- append(b, sum(n$score)/sum(n$count));
+  # append color
+  colors<-append(colors, "blue");
+  colors<-append(colors, "red");
+}
+
+# plot bars
+#barplot(b, col=colors);
+
+
+
+# segment by hour
+b <- c()
+colors <- c()
+for (dy in c("Monday", "Tuesday","Wednesday","Thursday","Friday")) {
+  # subset data
+  e <- subset(edu, day == dy);
+  n <- subset(non_edu, day == dy);
+  # append data
+  b<- append(b, sum(e$score)/sum(e$count));
+  b<- append(b, sum(n$score)/sum(n$count));
   # append color
   colors<-append(colors, "blue");
   colors<-append(colors, "red");
