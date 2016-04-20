@@ -23,7 +23,7 @@ for (hr in seq(1,23)) {
 }
 
 # plot bars
-#barplot(b, col=colors);
+barplot(b, col=colors);
 
 
 
@@ -43,7 +43,7 @@ for (dy in c("Monday", "Tuesday","Wednesday","Thursday","Friday")) {
 }
 
 # plot bars
-barplot(b, col=colors);
+#barplot(b, col=colors);
 
 # apply moving averages
 #mover <- function(x, win=5) { filter(x, rep(1/win, win), sides=2) }
