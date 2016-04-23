@@ -1,11 +1,16 @@
-p <- "/Users/austinstig/Developer/CS512/src/october.txt";
+p <- "/Users/austinstig/Developer/CS512/src/oct_words.txt";
 data <- read.csv(p, header=TRUE, sep = ",");
+
 # get day of week
 data$day <-weekdays(as.Date(strptime(data$time, "%Y-%m-%d %H:%M:%S")));
 data$hour <-as.numeric(strftime(strptime(data$time, "%Y-%m-%d %H:%M:%S"), "%H"));
+
 # segment by education type
 edu <- subset(data, edu == 1);
 non_edu <- subset(data, edu == 0);
+
+# setup plotting
+par(mfrow=c(3,1))
 
 # segment by hour
 b <- c()
@@ -30,7 +35,7 @@ barplot(b, col=colors, names.arg =nam);
 
 
 
-# segment by hour
+# segment by day
 b <- c()
 colors <- c()
 nam <- c()
